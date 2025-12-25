@@ -1,0 +1,27 @@
+name: Daily Revenue Intelligence
+
+on:
+  schedule:
+    - cron: "0 12 * * *"  # 7am EST
+    - cron: "0 11 * * *"  # 7am EDT
+  workflow_dispatch:
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: pip install -r requirements.txt
+      - name: Run revenue email
+        env:
+          RATES_PROVIDER: searchapi
+          SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          EMAIL_TO: Rhys.oconnell@yourplacehotel.com
+        run: python run.py
