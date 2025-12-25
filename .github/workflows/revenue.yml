@@ -17,7 +17,7 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Run revenue email
         env:
-          RATES_PROVIDER: searchapi
+          RATES_PROVIDER: serpapi
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
