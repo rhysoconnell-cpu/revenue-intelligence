@@ -204,7 +204,6 @@ def fetch_property_quote(h: Hotel, check_in: dt.date, check_out: dt.date) -> Quo
     "gl": GL,
     "no_cache": "true",
 }
-    }
 
     try:
         data = serp_get(params)
