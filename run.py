@@ -192,17 +192,18 @@ def fetch_property_quote(h: Hotel, check_in: dt.date, check_out: dt.date) -> Quo
     # For engine=google_hotels_property_details, DO NOT send `location=` (can cause 400).
     # Use token + q + dates.
     params = {
-        "engine": "google_hotels_property_details",
-        "q": h.query,
-        "property_token": h.property_token,
-        "check_in_date": check_in.isoformat(),
-        "check_out_date": check_out.isoformat(),
-        "adults": DEFAULT_ADULTS,
-        "rooms": DEFAULT_ROOMS,
-        "currency": DEFAULT_CURRENCY,
-        "hl": HL,
-        "gl": GL,
-        "no_cache": "true",  # force fresh pull (SerpApi caches by default up to ~1h)
+    "engine": "google_hotels",
+    "q": h.query,
+    "property_token": h.property_token,   # <-- IMPORTANT (token-locked)
+    "check_in_date": check_in.isoformat(),
+    "check_out_date": check_out.isoformat(),
+    "adults": DEFAULT_ADULTS,
+    "rooms": DEFAULT_ROOMS,
+    "currency": DEFAULT_CURRENCY,
+    "hl": HL,
+    "gl": GL,
+    "no_cache": "true",
+}
     }
 
     try:
