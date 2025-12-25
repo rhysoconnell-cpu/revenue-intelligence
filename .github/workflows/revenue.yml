@@ -17,11 +17,12 @@ jobs:
       - run: pip install -r requirements.txt
       - name: Run daily revenue email
         env:
-        DEBUG: "1"
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
           SMTP_USER: ${{ secrets.SMTP_USER }}
           SMTP_PASS: ${{ secrets.SMTP_PASS }}
           EMAIL_TO: Rhys.oconnell@yourplacehotel.com
+          # Turn on only when debugging:
+          # DEBUG: "1"
         run: python run.py
