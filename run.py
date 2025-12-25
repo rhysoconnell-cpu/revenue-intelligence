@@ -1,4 +1,8 @@
-import os, json, ssl, smtplib, datetime as dt
+import os
+import json
+import ssl
+import smtplib
+import datetime as dt
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
@@ -17,7 +21,7 @@ SMTP_HOST = os.getenv("SMTP_HOST", "").strip()
 SMTP_PORT = int(os.getenv("SMTP_PORT", "587"))
 SMTP_USER = os.getenv("SMTP_USER", "").strip()
 SMTP_PASS = os.getenv("SMTP_PASS", "").strip()
-EMAIL_TO  = os.getenv("EMAIL_TO", "Rhys.oconnell@yourplacehotel.com").strip()
+EMAIL_TO = os.getenv("EMAIL_TO", "Rhys.oconnell@yourplacehotel.com").strip()
 
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
@@ -28,11 +32,11 @@ ROOMS = 1
 # Forward-looking windows
 OFFSETS = [0, 7, 14]
 
-# Recommendation behavior (simple + explainable)
+# Recommendation knobs (simple and explainable)
 MIN_RATE = 99
 MAX_RATE = 399
 RAISE_IF_BELOW_AVG_PCT = 0.08
-DROP_IF_ABOVE_AVG_PCT  = 0.10
+DROP_IF_ABOVE_AVG_PCT = 0.10
 BASE_STEP = 10
 WEEKEND_BONUS = 10
 EVENT_BONUS = 10
@@ -46,42 +50,45 @@ class Hotel:
     query: str
     property_token: str
 
+
 @dataclass
 class Quote:
     hotel_key: str
     display_name: str
     check_in: dt.date
     check_out: dt.date
-
     price: Optional[float]
+
     ota_name: str = "Unknown"
     ota_url: str = ""
     matched_name: str = ""
     matched_address: str = ""
-
-    @property
-    def ok(self) -> bool:
-        return self.price is not None
 
 
 # ---------------- HELPERS ----------------
 def ny_now() -> dt.datetime:
     return dt.datetime.now(tz=NY_TZ)
 
+
 def ny_today() -> dt.date:
     return ny_now().date()
+
 
 def money(x: Optional[float]) -> str:
     return "N/A" if x is None else f"${x:,.0f}"
 
+
 def clamp(n: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, n))
+
 
 def is_weekend(d: dt.date) -> bool:
     return d.weekday() in (4, 5)  # Fri/Sat
 
+
 def avg(nums: List[float]) -> Optional[float]:
     return None if not nums else sum(nums) / len(nums)
+
 
 def short_domain(url: str) -> str:
     if not url:
@@ -92,11 +99,14 @@ def short_domain(url: str) -> str:
     except Exception:
         return ""
 
+
 def serp_get(params: Dict[str, Any]) -> Dict[str, Any]:
     if not SERP_API_KEY:
         raise RuntimeError("Missing SERP_API_KEY (GitHub Secret).")
+
     params = dict(params)
     params["api_key"] = SERP_API_KEY
+
     r = requests.get("https://serpapi.com/search.json", params=params, timeout=45)
     r.raise_for_status()
     return r.json()
@@ -112,39 +122,44 @@ def load_config() -> Tuple[str, str, List[Hotel]]:
 
     hotels: List[Hotel] = []
     for h in cfg.get("hotels", []):
-        hotels.append(Hotel(
-            key=str(h.get("key")),
-            display_name=str(h.get("display_name")),
-            query=str(h.get("query")),
-            property_token=str(h.get("property_token") or ""),
-        ))
+        hotels.append(
+            Hotel(
+                key=str(h.get("key")),
+                display_name=str(h.get("display_name")),
+                query=str(h.get("query")),
+                property_token=str(h.get("property_token") or ""),
+            )
+        )
 
     return portfolio, location, hotels
 
 
 # ---------------- EVENTS (BROOKLYN SIGNALS) ----------------
-def fetch_brooklyn_events() -> List[Dict[str, str]]:
-    """
-    Forward-looking Brooklyn events via SerpApi google_events.
-    """
-    data = serp_get({
-        "engine": "google_events",
-        "q": "Brooklyn events",
-        "location": "Brooklyn, New York, United States",
-        "hl": "en",
-        "gl": "us",
-    })
+def fetch_brooklyn_events(location: str) -> List[Dict[str, str]]:
+    data = serp_get(
+        {
+            "engine": "google_events",
+            "q": "Brooklyn events",
+            "location": location,
+            "hl": "en",
+            "gl": "us",
+        }
+    )
+
     events = data.get("events_results") or data.get("events") or []
     out: List[Dict[str, str]] = []
+
     if isinstance(events, list):
         for e in events[:12]:
             if isinstance(e, dict):
-                out.append({
-                    "title": str(e.get("title") or ""),
-                    "date": str(e.get("date") or e.get("start_date") or ""),
-                    "venue": str(e.get("venue") or ""),
-                    "link": str(e.get("link") or ""),
-                })
+                out.append(
+                    {
+                        "title": str(e.get("title") or ""),
+                        "date": str(e.get("date") or e.get("start_date") or ""),
+                        "venue": str(e.get("venue") or ""),
+                        "link": str(e.get("link") or ""),
+                    }
+                )
     return out
 
 
@@ -165,18 +180,21 @@ def fetch_property_quote(h: Hotel, location: str, check_in: dt.date, check_out: 
     if not h.property_token:
         return q
 
-    data = serp_get({
-        "engine": "google_hotels_property_details",
-        "property_token": h.property_token,
-        "check_in_date": check_in.isoformat(),
-        "check_out_date": check_out.isoformat(),
-        "currency": CURRENCY,
-        "adults": ADULTS,
-        "rooms": ROOMS,
-        "location": location,
-        "hl": "en",
-        "gl": "us",
-    })
+    # ✅ IMPORTANT FIX: SerpApi requires "q" for google_hotels_property_details
+    data = serp_get(
+        {
+            "engine": "google_hotels_property_details",
+            "q": h.query,  # REQUIRED (fixes the 400 Bad Request)
+            "property_token": h.property_token,
+            "check_in_date": check_in.isoformat(),
+            "check_out_date": check_out.isoformat(),
+            "currency": CURRENCY,
+            "adults": ADULTS,
+            "rooms": ROOMS,
+            "hl": "en",
+            "gl": "us",
+        }
+    )
 
     # identity fields (trust / audit trail)
     q.matched_name = str(data.get("property_name") or data.get("title") or data.get("name") or "")
@@ -185,26 +203,38 @@ def fetch_property_quote(h: Hotel, location: str, check_in: dt.date, check_out: 
     candidates: List[Tuple[float, str, str]] = []
 
     def consider(rate: Any, name: Any, url: Any):
-        if isinstance(rate, (int, float)) and rate > 0:
+        if isinstance(rate, (int, float)) and float(rate) > 0:
             candidates.append((float(rate), str(name or "Unknown"), str(url or "")))
 
-    # Common patterns
+    # Common response shapes
     prices = data.get("prices")
     if isinstance(prices, list):
         for p in prices:
             if isinstance(p, dict):
-                consider(p.get("extracted_rate") or p.get("rate"), p.get("name") or p.get("source"), p.get("link") or p.get("url"))
+                consider(
+                    p.get("extracted_rate") or p.get("rate"),
+                    p.get("name") or p.get("source"),
+                    p.get("link") or p.get("url"),
+                )
 
     offers = data.get("offers")
     if isinstance(offers, list):
         for o in offers:
             if isinstance(o, dict):
-                consider(o.get("extracted_rate") or o.get("rate"), o.get("name") or o.get("source"), o.get("link") or o.get("url"))
+                consider(
+                    o.get("extracted_rate") or o.get("rate"),
+                    o.get("name") or o.get("source"),
+                    o.get("link") or o.get("url"),
+                )
 
-    # Some payloads nest "rate_per_night"
+    # Sometimes nested
     rpn = data.get("rate_per_night")
     if isinstance(rpn, dict):
-        consider(rpn.get("extracted_lowest") or rpn.get("lowest"), "Google Hotels (base)", data.get("link"))
+        consider(
+            rpn.get("extracted_lowest") or rpn.get("lowest"),
+            "Google Hotels (base)",
+            data.get("link"),
+        )
 
     if candidates:
         candidates.sort(key=lambda t: t[0])
@@ -240,17 +270,29 @@ def recommend(quotes: List[Quote], your_key: str, check_in: dt.date, event_boost
 
     if diff_pct >= RAISE_IF_BELOW_AVG_PCT:
         target = clamp(int(round(your_rate + step)), MIN_RATE, MAX_RATE)
-        return (f"🔼 RAISE to {money(target)}", f"Below comp avg by {diff_pct*100:.1f}% | comp avg {money(comp_avg)} | weekend={weekend} event={event_boost}")
+        return (
+            f"🔼 RAISE to {money(target)}",
+            f"Below comp avg by {diff_pct*100:.1f}% | comp avg {money(comp_avg)} | weekend={weekend} event={event_boost}",
+        )
 
     if (your_rate - comp_avg) / comp_avg >= DROP_IF_ABOVE_AVG_PCT:
         target = clamp(int(round(your_rate - BASE_STEP)), MIN_RATE, MAX_RATE)
-        return (f"🔽 DROP to {money(target)}", f"Above comp avg by {((your_rate-comp_avg)/comp_avg)*100:.1f}% | comp avg {money(comp_avg)}")
+        return (
+            f"🔽 DROP to {money(target)}",
+            f"Above comp avg by {((your_rate-comp_avg)/comp_avg)*100:.1f}% | comp avg {money(comp_avg)}",
+        )
 
     return ("HOLD", f"Near comp avg | comp avg {money(comp_avg)} | weekend={weekend} event={event_boost}")
 
 
 # ---------------- DUETTO-STYLE EMAIL BUILDER ----------------
-def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Hotel], your_key: str, events: List[Dict[str, str]]) -> Tuple[str, str, str]:
+def build_email(
+    portfolio: str,
+    windows: Dict[int, List[Quote]],
+    hotels: List[Hotel],
+    your_key: str,
+    events: List[Dict[str, str]],
+) -> Tuple[str, str, str]:
     today = ny_today()
     now = ny_now()
 
@@ -271,7 +313,7 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
         vals = [float(x.price) for x in quotes if x.price is not None]
         if not vals:
             return {"min": None, "max": None, "avg": None}
-        return {"min": min(vals), "max": max(vals), "avg": sum(vals)/len(vals)}
+        return {"min": min(vals), "max": max(vals), "avg": sum(vals) / len(vals)}
 
     def your_quote(quotes: List[Quote]) -> Optional[Quote]:
         return next((q for q in quotes if q.hotel_key == your_key), None)
@@ -297,7 +339,6 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
         pos, total = rank_position(quotes)
         yq = your_quote(quotes)
 
-        # simple “event boost” heuristic: if the date string appears in an event date text
         event_boost = any(d.isoformat() in (e.get("date") or "") for e in events)
         rec, why = recommend(quotes, your_key, d, event_boost)
 
@@ -354,8 +395,8 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
         "<th style='text-align:center;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Position</th>"
         "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Recommendation</th>"
         "</tr>"
-        + "".join(exec_rows_html) +
-        "</table>"
+        + "".join(exec_rows_html)
+        + "</table>"
     )
     html.append("</div>")
 
@@ -428,16 +469,17 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
         avail_sorted = sorted(avail, key=lambda x: x.price)
 
         html.append("<table style='border-collapse:collapse;width:100%;font-size:13px;'>")
-        html.append("<tr>"
-                    "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Hotel</th>"
-                    "<th style='text-align:right;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Entry Rate</th>"
-                    "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Source</th>"
-                    "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Matched Listing</th>"
-                    "</tr>")
+        html.append(
+            "<tr>"
+            "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Hotel</th>"
+            "<th style='text-align:right;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Entry Rate</th>"
+            "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Source</th>"
+            "<th style='text-align:left;padding:10px;border-bottom:1px solid #ddd;color:#444;font-weight:700;'>Matched Listing</th>"
+            "</tr>"
+        )
 
         def row(q: Quote, highlight: bool) -> str:
             bg = "background:#f6f6f6;" if highlight else ""
-            name = q.display_name
             rate = money(q.price)
             src = row_source(q)
             matched = (q.matched_name or "").strip()
@@ -446,7 +488,7 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
             you_tag = " <span style='color:#666;font-size:12px;'>(you)</span>" if highlight else ""
             return (
                 f"<tr style='{bg}'>"
-                f"<td style='padding:10px;border-bottom:1px solid #f0f0f0;'><b>{name}</b>{you_tag}</td>"
+                f"<td style='padding:10px;border-bottom:1px solid #f0f0f0;'><b>{q.display_name}</b>{you_tag}</td>"
                 f"<td style='padding:10px;border-bottom:1px solid #f0f0f0;text-align:right;'><b>{rate}</b></td>"
                 f"<td style='padding:10px;border-bottom:1px solid #f0f0f0;'>{src} {open_link(q)}</td>"
                 f"<td style='padding:10px;border-bottom:1px solid #f0f0f0;color:#333;'>{matched}</td>"
@@ -472,11 +514,13 @@ def build_email(portfolio: str, windows: Dict[int, List[Quote]], hotels: List[Ho
 
     # Footer
     html.append("<div style='height:12px;'></div>")
-    html.append("<div style='color:#666;font-size:11px;padding:0 4px 8px 4px;'>"
-                "Notes: Prices are pulled using token-locked identity (property_token). "
-                "We show OTA source when available; otherwise we fall back to Google Hotels base. "
-                "Forward-looking only."
-                "</div>")
+    html.append(
+        "<div style='color:#666;font-size:11px;padding:0 4px 8px 4px;'>"
+        "Notes: Prices are pulled using token-locked identity (property_token). "
+        "We show OTA source when available; otherwise we fall back to Google Hotels base. "
+        "Forward-looking only."
+        "</div>"
+    )
 
     html.append("</div>")  # container
 
@@ -511,10 +555,8 @@ def main():
     if not your:
         raise RuntimeError("Missing bay_ridge in hotels.json")
 
-    # Pull events (signals)
-    events = fetch_brooklyn_events()
+    events = fetch_brooklyn_events(location)
 
-    # Pull windows
     today = ny_today()
     windows: Dict[int, List[Quote]] = {}
 
