@@ -35,6 +35,7 @@ jobs:
 
       - name: Run revenue intel
         env:
+        DEBUG: "1"
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
