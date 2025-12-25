@@ -15,9 +15,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r requirements.txt
-      - name: Run revenue email
+      - name: Run daily revenue email
         env:
-          RATES_PROVIDER: serpapi
           SERP_API_KEY: ${{ secrets.SERP_API_KEY }}
           SMTP_HOST: ${{ secrets.SMTP_HOST }}
           SMTP_PORT: ${{ secrets.SMTP_PORT }}
