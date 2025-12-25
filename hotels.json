@@ -1,5 +1,5 @@
 {
-  "portfolio_name": "Place Hotels — Revenue Intel",
+  "portfolio_name": "Place Hotels \u2014 Revenue Intel",
   "location": "Brooklyn, New York, United States",
   "hotels": [
     {
@@ -12,7 +12,7 @@
       "key": "avid_dyker",
       "display_name": "avid Dyker Heights",
       "query": "avid hotel Brooklyn - Dyker Heights by IHG",
-      "property_token": ""
+      "property_token": "ChkIhIn93dPI0udDGg0vZy8xMWtydHo2M2doEAE"
     },
     {
       "key": "insignia",
@@ -30,7 +30,7 @@
       "key": "bw_gregory",
       "display_name": "Best Western Gregory",
       "query": "Best Western Gregory Hotel Brooklyn",
-      "property_token": ""
+      "property_token": "ChcImvqCrefY5ahCGgsvZy8xdGdkZDl3ehAB"
     }
   ]
 }
