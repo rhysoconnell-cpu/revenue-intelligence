@@ -21,11 +21,11 @@ NY_TZ = tz.gettz("America/New_York")
 YOUR_HOTEL = "The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
 
 HOTELS = [
-    The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
-    "Insignia Hotel Dyker Heights",
-    "avid hotel Brooklyn - Dyker Heights by IHG",
-    "Umbrella Hotel Brooklyn",
-    "Best Western Gregory Hotel",
+ "Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
+    "Insignia Hotel Dyker Heights, Brooklyn, NY",
+    "Avid Hotel Dyker Heights, Brooklyn, NY",
+    "Umbrella Hotel, Brooklyn, NY",
+    "Best Western Gregory Hotel, Brooklyn, NY",
 ]
 
 # Forward-looking windows:
