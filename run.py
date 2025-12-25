@@ -18,10 +18,10 @@ from email.mime.multipart import MIMEMultipart
 
 NY_TZ = tz.gettz("America/New_York")
 
-YOUR_HOTEL = "Bay Ridge Hotel Brooklyn"
+YOUR_HOTEL = "The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
 
 HOTELS = [
-    "The Bay Ridge Hotel Brooklyn",
+    "The Best Western Gregory Hotel",
     "Insignia Hotel Dyker Heights",
     "avid hotel Brooklyn - Dyker Heights by IHG",
     "Umbrella Hotel Brooklyn",
