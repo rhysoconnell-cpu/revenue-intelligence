@@ -1,0 +1,36 @@
+{
+  "portfolio_name": "Place Hotels — Revenue Intel",
+  "location": "Brooklyn, New York, United States",
+  "hotels": [
+    {
+      "key": "bay_ridge",
+      "display_name": "Bay Ridge Hotel",
+      "query": "The Bay Ridge Hotel Brooklyn",
+      "property_token": ""
+    },
+    {
+      "key": "avid_dyker",
+      "display_name": "avid Dyker Heights",
+      "query": "avid hotel Brooklyn - Dyker Heights by IHG",
+      "property_token": ""
+    },
+    {
+      "key": "insignia",
+      "display_name": "Insignia Hotel",
+      "query": "Insignia Hotel Brooklyn",
+      "property_token": ""
+    },
+    {
+      "key": "umbrella",
+      "display_name": "Umbrella Hotel",
+      "query": "Umbrella Hotel Brooklyn",
+      "property_token": ""
+    },
+    {
+      "key": "bw_gregory",
+      "display_name": "Best Western Gregory",
+      "query": "Best Western Gregory Hotel Brooklyn",
+      "property_token": ""
+    }
+  ]
+}
