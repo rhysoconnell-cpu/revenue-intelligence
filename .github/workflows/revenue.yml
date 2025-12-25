@@ -35,3 +35,10 @@ jobs:
           EMAIL_TO: Rhys.oconnell@yourplacehotel.com
           # DEBUG: "1"
         run: python run.py
+- name: Commit updated hotels.json (if changed)
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git add hotels.json
+          git diff --cached --quiet || git commit -m "Update hotel property tokens"
+          git push
