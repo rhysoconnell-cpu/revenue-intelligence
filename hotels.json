@@ -5,7 +5,7 @@
     {
       "key": "bay_ridge",
       "display_name": "Bay Ridge Hotel",
-      "query": "The Bay Ridge Hotel Brooklyn",
+      "query": "The Bay Ridge Hotel 315 93rd St Brooklyn NY 11209",
       "property_token": ""
     },
     {
@@ -23,7 +23,7 @@
     {
       "key": "umbrella",
       "display_name": "Umbrella Hotel",
-      "query": "Umbrella Hotel Brooklyn",
+      "query": "Umbrella Hotel Brooklyn NY 11209",
       "property_token": ""
     },
     {
