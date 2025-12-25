@@ -106,41 +106,57 @@ def serp_get(params: Dict[str, Any]) -> Dict[str, Any]:
 # ---------- TOKEN BOOTSTRAP ----------
 def bootstrap_tokens(hotels: List[Hotel], location: str) -> Dict[str, str]:
     """
-    Uses google_hotels_autocomplete to retrieve property_token suggestions.
-    Prints best guess token for each hotel query.
+    More reliable than autocomplete:
+    Use engine=google_hotels and grab properties[0].property_token.
     """
     results: Dict[str, str] = {}
+
+    # pick a safe future date so hotels returns properties
+    today = ny_today()
+    check_in = today + dt.timedelta(days=7)
+    check_out = check_in + dt.timedelta(days=1)
+
     for h in hotels:
         data = serp_get({
-            "engine": "google_hotels_autocomplete",
+            "engine": "google_hotels",
             "q": h.query,
+            "check_in_date": check_in.isoformat(),
+            "check_out_date": check_out.isoformat(),
+            "currency": CURRENCY,
+            "adults": ADULTS,
+            "rooms": ROOMS,
             "location": location,
             "hl": "en",
             "gl": "us",
-            "currency": CURRENCY,
         })
 
-        # SerpApi returns suggestions; we try to pick the first property suggestion with property_token
-        suggestions = data.get("suggestions") or data.get("autocomplete") or data.get("results") or []
+        props = data.get("properties") or []
         token = ""
-        picked = None
+        picked_name = ""
+        picked_addr = ""
 
-        if isinstance(suggestions, list):
-            for s in suggestions:
-                if isinstance(s, dict) and s.get("property_token"):
-                    token = str(s.get("property_token"))
-                    picked = s
+        if isinstance(props, list) and props:
+            # try best name match first
+            target = (h.query or "").lower()
+            chosen = props[0]
+            for p in props:
+                nm = (p.get("name") or "").lower()
+                if nm and (nm in target or target in nm):
+                    chosen = p
                     break
+
+            token = str(chosen.get("property_token") or "")
+            picked_name = str(chosen.get("name") or "")
+            picked_addr = str(chosen.get("address") or "")
 
         results[h.key] = token
 
-        print("\n=== TOKEN LOOKUP ===")
+        print("\n=== TOKEN LOOKUP (google_hotels) ===")
         print("Hotel:", h.display_name)
         print("Query:", h.query)
+        print("Picked:", picked_name, "|", picked_addr)
         print("Token:", token or "NOT FOUND")
-        if DEBUG and isinstance(picked, dict):
-            print("Picked:", {k: picked.get(k) for k in ("value", "type", "property_token", "serpapi_google_hotels_link")})
-        print("====================\n")
+        print("===================================\n")
 
     return results
 
