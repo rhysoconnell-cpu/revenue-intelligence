@@ -5,7 +5,7 @@
     {
       "key": "bay_ridge",
       "display_name": "Bay Ridge Hotel",
-      "query": "The Bay Ridge Hotel 93rd Street Brooklyn NY",
+      "query": "The Bay Ridge Hotel Brooklyn",
       "property_token": ""
     },
     {
@@ -17,13 +17,13 @@
     {
       "key": "insignia",
       "display_name": "Insignia Hotel",
-      "query": "Insignia Hotel Ascend Hotel Collection Brooklyn NY",
+      "query": "Insignia Hotel Brooklyn, an Ascend Collection Hotel",
       "property_token": ""
     },
     {
       "key": "umbrella",
       "display_name": "Umbrella Hotel",
-      "query": "Umbrella Hotel Brooklyn Bay Ridge NY",
+      "query": "Umbrella Hotel Brooklyn",
       "property_token": ""
     },
     {
