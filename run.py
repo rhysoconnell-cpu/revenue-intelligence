@@ -163,7 +163,6 @@ def fetch_rate_serpapi(hotel: str, check_in: dt.date, check_out: dt.date) -> Rat
         # Example structures:
         candidates.append(safe_get(chosen, ["rate_per_night", "lowest"]))
         candidates.append(safe_get(chosen, ["rate_per_night", "extracted_lowest"]))
-        candidates.append(safe_get(chosen, ["total_rate", "lowest"]))
         candidates.append(chosen.get("price") if isinstance(chosen.get("price"), (int, float)) else None)
         candidates.append(chosen.get("extracted_price") if isinstance(chosen.get("extracted_price"), (int, float)) else None)
 
