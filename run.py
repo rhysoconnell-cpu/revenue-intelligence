@@ -13,18 +13,18 @@ from email.mime.multipart import MIMEMultipart
 
 
 # =========================
-# SETTINGS (EDIT THESE)
+# SETTINGS (EDIT IF NEEDED)
 # =========================
 
 NY_TZ = tz.gettz("America/New_York")
 
-YOUR_HOTEL = "The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
+YOUR_HOTEL = "The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209"
 
 HOTELS = [
- "Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
-    "Insignia Hotel Dyker Heights, Brooklyn, NY",
-    "Avid Hotel Dyker Heights, Brooklyn, NY",
-    "Umbrella Hotel, Brooklyn, NY",
+    "The Bay Ridge Hotel, 315 93rd St, Brooklyn, NY 11209",
+    "avid hotel Brooklyn - Dyker Heights by IHG, 636 86th St, Brooklyn, NY 11228",
+    "Insignia Hotel, an Ascend Hotel Collection Member, Brooklyn, NY",
+    "Umbrella Hotel Brooklyn, Brooklyn, NY",
     "Best Western Gregory Hotel, Brooklyn, NY",
 ]
 
@@ -32,11 +32,11 @@ HOTELS = [
 # Tonight (D0), D+7, D+14
 OFFSETS = [0, 7, 14]
 
-# Recommendation guardrails (edit later)
+# Recommendation guardrails
 MIN_RATE = 99
 MAX_RATE = 399
 
-# How aggressive to move (simple deterministic logic)
+# Deterministic pricing logic (simple and explainable)
 RAISE_IF_BELOW_AVG_PCT = 0.08   # if Bay Ridge is 8%+ below comp avg => raise
 DROP_IF_ABOVE_AVG_PCT  = 0.10   # if Bay Ridge is 10%+ above comp avg => drop
 BASE_STEP = 10
@@ -58,7 +58,7 @@ EMAIL_TO  = os.getenv("EMAIL_TO", "Rhys.oconnell@yourplacehotel.com").strip()
 
 DEBUG = os.getenv("DEBUG", "0") == "1"
 
-# Google Hotels query standardization
+# Standardize the search
 CURRENCY = "USD"
 ADULTS = 2
 ROOMS = 1
@@ -73,8 +73,9 @@ class Rate:
     hotel: str
     check_in: dt.date
     check_out: dt.date
-    entry_rate: Optional[float]  # base rate only
-    source: str = "SerpApi / Google Hotels"
+    entry_rate: Optional[float]     # nightly price
+    ota: str = "Unknown"            # e.g. Booking.com
+    ota_url: str = ""               # link to that OTA offer if provided by SerpApi
 
     @property
     def available(self) -> bool:
@@ -103,13 +104,14 @@ def avg(vals: List[float]) -> Optional[float]:
 
 
 # =========================
-# SERPAPI — GOOGLE HOTELS (BASE RATE ONLY)
+# SERPAPI — GOOGLE HOTELS (OTA ROW PRICE)
 # =========================
 
-def fetch_google_hotels_base_rate(hotel: str, check_in: dt.date, check_out: dt.date) -> Rate:
+def fetch_google_hotels_ota_entry(hotel: str, check_in: dt.date, check_out: dt.date) -> Rate:
     """
-    Pulls Google Hotels via SerpApi, attempting to extract BASE entry rate (rate_per_night),
-    avoiding taxes/fees totals.
+    Pulls Google Hotels via SerpApi and selects the LOWEST OTA offer from the 'prices' list
+    (the “Featured options” rows like Booking.com $142).
+    This is the most owner-friendly: price + OTA source.
     """
     if not SERP_API_KEY:
         raise RuntimeError("Missing SERP_API_KEY (add it in GitHub Secrets).")
@@ -130,12 +132,11 @@ def fetch_google_hotels_base_rate(hotel: str, check_in: dt.date, check_out: dt.d
     resp.raise_for_status()
     data = resp.json()
 
-    # SerpApi often returns a list like: data["properties"]
     props = data.get("properties") or []
     chosen = None
 
     if isinstance(props, list) and props:
-        # Try to match by name loosely; otherwise take first result
+        # Try to match by name loosely; otherwise first result
         target = hotel.lower()
         chosen = props[0]
         for p in props:
@@ -144,35 +145,52 @@ def fetch_google_hotels_base_rate(hotel: str, check_in: dt.date, check_out: dt.d
                 chosen = p
                 break
 
-    base_rate = None
+    entry_rate = None
+    ota = "Unknown"
+    ota_url = ""
 
     if isinstance(chosen, dict):
-        # BASE RATE ONLY: prefer rate_per_night -> lowest/extracted_lowest
-        rpn = chosen.get("rate_per_night") if isinstance(chosen.get("rate_per_night"), dict) else None
-        if rpn:
-            candidates = []
-            for k in ("lowest", "extracted_lowest"):
-                v = rpn.get(k)
-                if isinstance(v, (int, float)) and v > 0:
-                    candidates.append(float(v))
-            if candidates:
-                base_rate = min(candidates)
+        prices = chosen.get("prices")
+        if isinstance(prices, list) and prices:
+            best = None
+            for p in prices:
+                if not isinstance(p, dict):
+                    continue
 
-        # Sometimes base nightly rate appears directly
-        if base_rate is None:
-            for k in ("price", "extracted_price"):
-                v = chosen.get(k)
-                if isinstance(v, (int, float)) and v > 0:
-                    base_rate = float(v)
-                    break
+                rate = p.get("extracted_rate")
+                if rate is None:
+                    rate = p.get("rate")
+
+                if not isinstance(rate, (int, float)) or rate <= 0:
+                    continue
+
+                name = p.get("name") or p.get("source") or "Unknown"
+                link = p.get("link") or p.get("url") or ""
+
+                if best is None or float(rate) < best["rate"]:
+                    best = {"rate": float(rate), "name": name, "link": link}
+
+            if best:
+                entry_rate = best["rate"]
+                ota = best["name"]
+                ota_url = best["link"]
 
         if DEBUG:
-            print("DEBUG HOTEL:", hotel, check_in, "CHOSEN_KEYS:", list(chosen.keys()))
-            print("DEBUG rate_per_night:", chosen.get("rate_per_night"))
-            print("DEBUG price/extracted_price:", chosen.get("price"), chosen.get("extracted_price"))
-            print("DEBUG total_rate (ignored):", chosen.get("total_rate"))
+            print("MATCHED_QUERY:", hotel, check_in.isoformat())
+            print("CHOSEN_NAME:", chosen.get("name"))
+            print("CHOSEN_GPS:", chosen.get("gps_coordinates"))
+            print("CHOSEN_LINK:", chosen.get("link"))
+            print("PRICES_SAMPLE:", (chosen.get("prices") or [])[:3])
+            print("SELECTED_OTA:", entry_rate, ota, ota_url)
 
-    return Rate(hotel=hotel, check_in=check_in, check_out=check_out, entry_rate=base_rate)
+    return Rate(
+        hotel=hotel,
+        check_in=check_in,
+        check_out=check_out,
+        entry_rate=entry_rate,
+        ota=ota,
+        ota_url=ota_url,
+    )
 
 
 # =========================
@@ -233,9 +251,6 @@ def fetch_barclays_events(next_days: int = 14) -> List[Tuple[dt.date, str]]:
     return uniq
 
 def build_event_map() -> Dict[dt.date, List[str]]:
-    """
-    Returns dict: {date: [event titles]}
-    """
     ev = fetch_barclays_events(next_days=14)
     m: Dict[dt.date, List[str]] = {}
     for d, t in ev:
@@ -248,9 +263,6 @@ def build_event_map() -> Dict[dt.date, List[str]]:
 # =========================
 
 def recommend(bucket_rates: List[Rate], check_in: dt.date, events: Dict[dt.date, List[str]]) -> Tuple[str, str]:
-    """
-    Returns: (recommendation_line, opportunities_line)
-    """
     your = next((r for r in bucket_rates if r.hotel == YOUR_HOTEL), None)
     comps = [r for r in bucket_rates if r.hotel != YOUR_HOTEL]
 
@@ -261,22 +273,17 @@ def recommend(bucket_rates: List[Rate], check_in: dt.date, events: Dict[dt.date,
     weekend = is_weekend(check_in)
 
     if not your or your.entry_rate is None or comp_avg is None:
-        return ("HOLD (insufficient data)", "Some rates were not found — try slightly different hotel names.")
+        return ("HOLD (insufficient data)", "Some rates were not found — adjust hotel names/addresses for stronger matching.")
 
     your_rate = float(your.entry_rate)
-    diff_pct = (comp_avg - your_rate) / comp_avg  # positive => you are below market
+    diff_pct = (comp_avg - your_rate) / comp_avg  # positive => below market
 
-    # Decide action
     action = "HOLD"
     step = 0
 
     if diff_pct >= RAISE_IF_BELOW_AVG_PCT:
         action = "RAISE"
-        step = BASE_STEP
-        if weekend:
-            step += WEEKEND_BONUS
-        if has_event:
-            step += EVENT_BONUS
+        step = BASE_STEP + (WEEKEND_BONUS if weekend else 0) + (EVENT_BONUS if has_event else 0)
     elif (your_rate - comp_avg) / comp_avg >= DROP_IF_ABOVE_AVG_PCT:
         action = "DROP"
         step = BASE_STEP
@@ -289,7 +296,6 @@ def recommend(bucket_rates: List[Rate], check_in: dt.date, events: Dict[dt.date,
 
     target = clamp(target, MIN_RATE, MAX_RATE)
 
-    # Text
     opp = []
     if diff_pct > 0:
         opp.append(f"Bay Ridge is BELOW comp avg by {diff_pct*100:.1f}%.")
@@ -314,16 +320,20 @@ def rank_lines(bucket_rates: List[Rate]) -> List[str]:
     avail = [r for r in bucket_rates if r.entry_rate is not None]
     unavail = [r for r in bucket_rates if r.entry_rate is None]
     avail.sort(key=lambda r: r.entry_rate)
+
     lines = []
     i = 1
     for r in avail:
         marker = "  <-- YOUR HOTEL" if r.hotel == YOUR_HOTEL else ""
-        lines.append(f"{i}. {r.hotel} — {money(r.entry_rate)}{marker}")
+        link = f" | {r.ota_url}" if r.ota_url else ""
+        lines.append(f"{i}. {r.hotel} — {money(r.entry_rate)} ({r.ota}){link}{marker}")
         i += 1
+
     for r in unavail:
         marker = "  <-- YOUR HOTEL" if r.hotel == YOUR_HOTEL else ""
         lines.append(f"{i}. {r.hotel} — N/A (not found){marker}")
         i += 1
+
     return lines
 
 
@@ -351,35 +361,33 @@ def send_email(subject: str, body: str) -> None:
 def build_email(windows: Dict[int, List[Rate]], events: Dict[dt.date, List[str]]) -> Tuple[str, str]:
     today = ny_today()
     now = dt.datetime.now(tz=NY_TZ)
+
     subject = f"Bay Ridge — Forward Revenue Intelligence (Tonight / 7 / 14) | {today.isoformat()}"
 
     lines: List[str] = []
     lines.append("BAY RIDGE HOTEL — FORWARD REVENUE INTELLIGENCE")
     lines.append(f"Generated: {now.strftime('%Y-%m-%d %I:%M %p')} ET")
-    lines.append("Source: SerpApi → Google Hotels (base entry rate)")
+    lines.append("Source: SerpApi → Google Hotels (lowest OTA 'Featured option' + OTA name/link)")
     lines.append("")
 
-    # Executive summary
     lines.append("EXECUTIVE SUMMARY")
     for off in OFFSETS:
         label = "Tonight (D0)" if off == 0 else (f"D+{off}")
-        bucket = windows[off]
         date = today + dt.timedelta(days=off)
-        rec, _ = recommend(bucket, date, events)
+        rec, _ = recommend(windows[off], date, events)
         lines.append(f"- {label} ({date.isoformat()}): {rec}")
     lines.append("")
 
-    # Detail sections
     for off in OFFSETS:
         date = today + dt.timedelta(days=off)
         label = "Tonight (D0)" if off == 0 else f"D+{off}"
-        bucket = windows[off]
 
-        lines.append("=" * 70)
+        lines.append("=" * 78)
         lines.append(f"{label} — Check-in {date.isoformat()} (1 night)")
-        lines.append("=" * 70)
-        lines.append("ENTRY RATE RANKING (cheapest available base rate)")
-        lines.extend(rank_lines(bucket))
+        lines.append("=" * 78)
+
+        lines.append("ENTRY RATE RANKING (lowest OTA offer + OTA source)")
+        lines.extend(rank_lines(windows[off]))
         lines.append("")
 
         ev = events.get(date, [])
@@ -391,7 +399,7 @@ def build_email(windows: Dict[int, List[Rate]], events: Dict[dt.date, List[str]]
             lines.append("- None detected (Barclays feed).")
         lines.append("")
 
-        rec, opp = recommend(bucket, date, events)
+        rec, opp = recommend(windows[off], date, events)
         lines.append("OPPORTUNITIES")
         lines.append(f"- {opp}")
         lines.append("")
@@ -399,10 +407,10 @@ def build_email(windows: Dict[int, List[Rate]], events: Dict[dt.date, List[str]]
         lines.append(f"- {rec}")
         lines.append("")
 
-    lines.append("=" * 70)
+    lines.append("=" * 78)
     lines.append("NOTES")
-    lines.append("- Rates are live public entry rates at time of run (Google Hotels base rate view).")
-    lines.append("- If any hotel shows N/A, adjust the hotel name string (add 'Brooklyn NY').")
+    lines.append("- Prices are the lowest OTA offer returned by Google Hotels (Featured options) at time of run.")
+    lines.append("- If a hotel shows N/A, refine the hotel query string (add street address).")
     lines.append("")
 
     return subject, "\n".join(lines)
@@ -410,8 +418,6 @@ def build_email(windows: Dict[int, List[Rate]], events: Dict[dt.date, List[str]]
 
 def main():
     today = ny_today()
-
-    # events map for next 14 days
     events = build_event_map()
 
     windows: Dict[int, List[Rate]] = {}
@@ -421,7 +427,8 @@ def main():
 
         bucket: List[Rate] = []
         for h in HOTELS:
-            bucket.append(fetch_google_hotels_base_rate(h, check_in, check_out))
+            bucket.append(fetch_google_hotels_ota_entry(h, check_in, check_out))
+
         windows[off] = bucket
 
     subject, body = build_email(windows, events)
